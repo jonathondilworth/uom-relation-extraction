@@ -3,6 +3,19 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Ignore contents of data folders
+data/tacred/*
+data/retacred/*
+
+# experimental models folder contains other model repos, ignore for now...
+#notebooks/experimental/models/*
+notebooks/models
+
+# Mac specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+
 # C extensions
 *.so
 
