@@ -8,7 +8,7 @@ Relation Extraction for Text Mining - COMP61332
 
 *Note: due to licensing, the dataset is not included within this repository. Instructions on where to obtain the dataset and how to patch it can be found under the next section.*
 
-'''
+```bash
 .root_dir
 │
 ├── config/
@@ -47,7 +47,7 @@ Relation Extraction for Text Mining - COMP61332
 ├── Dockerfile
 ├── LICENSE
 └── README.md
-'''
+```
 
 *We may consider merging experimental notebooks into 00_experimental.ipynb, retaining that folder on a seperate branch and eventually remove it from 'main'.*
 
