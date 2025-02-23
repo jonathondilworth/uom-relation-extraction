@@ -47,8 +47,10 @@ class Processor:
             - typed_entity_marker_pos_seq_punct: @ * subject ner type + pos_1 + pos_2 * subject_{token_{1}} subject_{token_{2}} @, # ^ object ner type pos_1 ^ object # <-- Appends all PoS tags \in multiset(entity_{POStags}) using punct representation
             - typed_entity_marker_pos_set_punct: @ * subject ner type + pos_1 + pos_2 * subject_{token_{1}} subject_{token_{2}} @, # ^ object ner type pos_1 ^ object # <-- Appends all PoS tags \in multiset(entity_{POStags}) using punct representation
         """
+        
         sents = []
         input_format = self.args.input_format
+        
         if input_format == 'entity_mask':
             subj_type = '[SUBJ-{}]'.format(subj_type)
             obj_type = '[OBJ-{}]'.format(obj_type)
@@ -56,6 +58,7 @@ class Processor:
                 if token not in self.new_tokens:
                     self.new_tokens.append(token)
                     self.tokenizer.add_tokens([token])
+        
         elif input_format == 'typed_entity_marker':
             subj_start = '[SUBJ-{}]'.format(subj_type)
             subj_end = '[/SUBJ-{}]'.format(subj_type)
@@ -135,15 +138,31 @@ class Processor:
 
         # approach #5:
         elif input_format == 'typed_entity_marker_pos_seq_punct':
-            # TODO: code here
-            subj_type = self.tokenizer.tokenize(subj_type.replace("_", " ").lower())
-            obj_type = self.tokenizer.tokenize(obj_type.replace("_", " ").lower())
+            # see approach #2
+            subj_pos_tags = pos_tags[ss : se + 1];
+            subj_pos_string = "+".join(subj_pos_tags);
+            obj_pos_tags = pos_tags[os : oe + 1];
+            obj_pos_string = "+".join(obj_pos_tags);
+            # reuse part of originally adapted approach
+            subj_type = subj_type.replace("_", " ").lower();
+            obj_type = obj_type.replace("_", " ").lower();
+            # concatenate PoS tags
+            subj_type = self.tokenizer.tokenize(subj_type + ":" + subj_pos_string);
+            obj_type = self.tokenizer.tokenize(obj_type + ":" + obj_pos_tags);
 
         # approach #6:
         elif input_format == 'typed_entity_marker_pos_set_punct':
-            # TODO: code here
-            subj_type = self.tokenizer.tokenize(subj_type.replace("_", " ").lower())
-            obj_type = self.tokenizer.tokenize(obj_type.replace("_", " ").lower())
+            # see approach #3
+            subj_pos_tags = list(dict.fromkeys(pos_tags[ss : se + 1]));
+            subj_pos_string = "+".join(subj_pos_tags);
+            obj_pos_tags = list(dict.fromkeys(pos_tags[os : oe + 1]));
+            obj_pos_string = "+".join(obj_pos_tags);
+            # reuse part of originally adapted approach
+            subj_type = subj_type.replace("_", " ").lower();
+            obj_type = obj_type.replace("_", " ").lower();
+            # concatenate PoS tags
+            subj_type = self.tokenizer.tokenize(subj_type + ":" + subj_pos_string);
+            obj_type = self.tokenizer.tokenize(obj_type + ":" + obj_pos_tags);
 
 
         for i_t, token in enumerate(tokens):
