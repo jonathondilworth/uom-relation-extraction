@@ -28,10 +28,11 @@ class Processor:
         if self.args.input_format == 'entity_marker':
             self.new_tokens = ['[E1]', '[/E1]', '[E2]', '[/E2]']
         self.tokenizer.add_tokens(self.new_tokens)
-        if self.args.input_format not in ('entity_mask', 'entity_marker', 'entity_marker_punct', 'typed_entity_marker', 'typed_entity_marker_punct'):
+        # changes: added 'typed_entity_marker_pos', 'typed_entity_marker_pos_punct' to the list of valid formats
+        if self.args.input_format not in ('entity_mask', 'entity_marker', 'entity_marker_punct', 'typed_entity_marker', 'typed_entity_marker_punct', 'typed_entity_marker_pos', 'typed_entity_marker_pos_seq', 'typed_entity_marker_pos_set', 'typed_entity_marker_pos_punct', 'typed_entity_marker_pos_seq_punct', 'typed_entity_marker_pos_set_punct'):
             raise Exception("Invalid input format!")
 
-    def tokenize(self, tokens, subj_type, obj_type, ss, se, os, oe):
+    def tokenize(self, tokens, subj_type, obj_type, ss, se, os, oe, pos_tags=None):
         """
         Implement the following input formats:
             - entity_mask: [SUBJ-NER], [OBJ-NER].
@@ -39,6 +40,12 @@ class Processor:
             - entity_marker_punct: @ subject @, # object #.
             - typed_entity_marker: [SUBJ-NER] subject [/SUBJ-NER], [OBJ-NER] obj [/OBJ-NER]
             - typed_entity_marker_punct: @ * subject ner type * subject @, # ^ object ner type ^ object #
+            - typed_entity_marker_pos: [SUBJ-NER*POS1] subject [/SUBJ-NER*POS1], [OBJ-NER*POS1] obj [/OBJ-NER*POS1] <-- Appends the first PoS tag to the marker
+            - typed_entity_marker_pos_seq: [SUBJ-NER*POS1+POS2] subject [/SUBJ-NER*POS1+POS2], [OBJ-NER*POS1+POS2] obj [/OBJ-NER*POS1+POS2] <-- Appends all PoS tags \in multiset(entity_{POStags})
+            - typed_entity_marker_pos_set: [SUBJ-NER*UNIQUEPOS1+UNIQUEPOS2] subject [/SUBJ-NER*UNIQUEPOS1+UNIQUEPOS2], [OBJ-NER*UNIQUEPOS1+UNIQUEPOS2] obj [/OBJ-NER*UNIQUEPOS1+UNIQUEPOS2] <-- Appends all PoS tags \in set(entity_{POStags})
+            - typed_entity_marker_pos_punct: @ * subject ner type + pos tag * subject @, # ^ object ner type pos tag ^ object # <-- Appends first PoS tag using punct representation
+            - typed_entity_marker_pos_seq_punct: @ * subject ner type + pos_1 + pos_2 * subject_{token_{1}} subject_{token_{2}} @, # ^ object ner type pos_1 ^ object # <-- Appends all PoS tags \in multiset(entity_{POStags}) using punct representation
+            - typed_entity_marker_pos_set_punct: @ * subject ner type + pos_1 + pos_2 * subject_{token_{1}} subject_{token_{2}} @, # ^ object ner type pos_1 ^ object # <-- Appends all PoS tags \in multiset(entity_{POStags}) using punct representation
         """
         sents = []
         input_format = self.args.input_format
@@ -58,9 +65,86 @@ class Processor:
                 if token not in self.new_tokens:
                     self.new_tokens.append(token)
                     self.tokenizer.add_tokens([token])
+        
+        # approach #1: producing a subj/obj strart & subj/obj end tag by appending the PoS tag @ ss, se, os & oe \in multiset(entity_{POStags}) to 'subject/object' & entity-type:
+        # e.g. [SUBJ-PERSON-NPP] Alice Dellal [/SUBJ-PERSON-NPP]
+        elif input_format == 'typed_entity_marker_pos':
+            # construct subject tags
+            subj_start = '[SUBJ-{}*{}]'.format(subj_type, pos_tags[ss]);
+            subj_end = '[/SUBJ-{}*{}]'.format(subj_type, pos_tags[se]);
+            # & object tags
+            obj_start = '[OBJ-{}*{}]'.format(obj_type, pos_tags[os]);
+            obj_end = '[/OBJ-{}*{}]'.format(obj_type, pos_tags[oe]);
+            # if these tokens are considered unseen new tokens, add them to the set of new tokens
+            for token in (subj_start, subj_end, obj_start, obj_end):
+                if token not in self.new_tokens:
+                    self.new_tokens.append(token);
+                    self.tokenizer.add_tokens([token]);
+        
+        # approach #2: producing a subj start & subj end tag by concat'ing the subject/object, entity-type & sequenced PoS tags together
+        # if the entity length is > 1, then produce [SUBJ-TYPE*POS1+POS2] subj_token_1 subj_token_2 [/SUBJ-TYPE*POS1+POS2] & same for the obj
+        elif input_format == 'typed_entity_marker_pos_seq':
+            # grabbing the PoS between the subject start & subject end 
+            subj_pos_tags = pos_tags[ss : se + 1];
+            # constructing a PoS string to represent the sequence of tags
+            subj_pos_string = "+".join(subj_pos_tags);
+            # building the subj opening & closing tag
+            subj_start = '[SUBJ-{}*{}]'.format(subj_type, subj_pos_string);
+            subj_end = '[/SUBJ-{}*{}]'.format(subj_type, subj_pos_string);
+            # same again for object start & end tag
+            obj_pos_tags = pos_tags[os : oe + 1];
+            obj_pos_string = "+".join(obj_pos_tags);
+            obj_start = '[OBJ-{}*{}]'.format(obj_type, obj_pos_string);
+            obj_end = '[/OBJ-{}*{}]'.format(obj_type, obj_pos_string);
+            # if these tokens are considered unseen new tokens, add them to the set of new tokens
+            for token in (subj_start, subj_end, obj_start, obj_end):
+                if token not in self.new_tokens:
+                    self.new_tokens.append(token);
+                    self.tokenizer.add_tokens([token]);
+
+        # approach #3: similar to approach #2, but simply take the set of PoS tags
+        elif input_format == 'typed_entity_marker_pos_set':
+            # rather than use set(), we're going to retain some degree of order
+            subj_pos_tags = list(dict.fromkeys(pos_tags[ss : se + 1]));
+            subj_pos_string = "+".join(subj_pos_tags);
+            subj_start = '[SUBJ-{}*{}]'.format(subj_type, subj_pos_string);
+            subj_end = '[/SUBJ-{}*{}]'.format(subj_type, subj_pos_string);
+            # same for obj
+            obj_pos_tags = list(dict.fromkeys(pos_tags[os : oe + 1]));
+            obj_pos_string = "+".join(obj_pos_tags);
+            obj_start = '[OBJ-{}*{}]'.format(obj_type, obj_pos_string);
+            obj_end = '[/OBJ-{}*{}]'.format(obj_type, obj_pos_string);
+            for token in (subj_start, subj_end, obj_start, obj_end):
+                if token not in self.new_tokens:
+                    self.new_tokens.append(token);
+                    self.tokenizer.add_tokens([token]);
+
+        # original adaptation from: https://arxiv.org/pdf/2102.01373v4
         elif input_format == 'typed_entity_marker_punct':
             subj_type = self.tokenizer.tokenize(subj_type.replace("_", " ").lower())
             obj_type = self.tokenizer.tokenize(obj_type.replace("_", " ").lower())
+
+        # approach #4: adding a single PoS tag 
+        elif input_format == 'typed_entity_marker_pos_punct':
+            subj_first_pos = pos_tags[ss];
+            obj_first_pos = pos_tags[os];
+            subj_type = subj_type.replace("_", " ").lower()
+            subj_type = self.tokenizer.tokenize(subj_type + "+" + subj_first_pos)
+            obj_type = obj_type.replace("_", " ").lower()
+            obj_type = self.tokenizer.tokenize(obj_type + "+" + obj_first_pos)
+
+        # approach #5:
+        elif input_format == 'typed_entity_marker_pos_seq_punct':
+            # TODO: code here
+            subj_type = self.tokenizer.tokenize(subj_type.replace("_", " ").lower())
+            obj_type = self.tokenizer.tokenize(obj_type.replace("_", " ").lower())
+
+        # approach #6:
+        elif input_format == 'typed_entity_marker_pos_set_punct':
+            # TODO: code here
+            subj_type = self.tokenizer.tokenize(subj_type.replace("_", " ").lower())
+            obj_type = self.tokenizer.tokenize(obj_type.replace("_", " ").lower())
+
 
         for i_t, token in enumerate(tokens):
             tokens_wordpiece = self.tokenizer.tokenize(token)
@@ -99,7 +183,7 @@ class Processor:
                 if i_t == oe:
                     tokens_wordpiece = tokens_wordpiece + ['#']
 
-            elif input_format == 'typed_entity_marker':
+            elif input_format == 'typed_entity_marker' or input_format == 'typed_entity_marker_pos' or input_format == 'typed_entity_marker_pos_seq' or input_format == 'typed_entity_marker_pos_set':
                 if i_t == ss:
                     new_ss = len(sents)
                     tokens_wordpiece = [subj_start] + tokens_wordpiece
@@ -111,7 +195,7 @@ class Processor:
                 if i_t == oe:
                     tokens_wordpiece = tokens_wordpiece + [obj_end]
 
-            elif input_format == 'typed_entity_marker_punct':
+            elif input_format == 'typed_entity_marker_punct' or input_format == 'typed_entity_marker_pos_punct' or input_format == 'typed_entity_marker_pos_seq_punct' or input_format == 'typed_entity_marker_pos_set_punct':
                 if i_t == ss:
                     new_ss = len(sents)
                     tokens_wordpiece = ['@'] + ['*'] + subj_type + ['*'] + tokens_wordpiece
@@ -147,7 +231,12 @@ class TACREDProcessor(Processor):
             tokens = d['token']
             tokens = [convert_token(token) for token in tokens]
 
-            input_ids, new_ss, new_os = self.tokenize(tokens, d['subj_type'], d['obj_type'], ss, se, os, oe)
+            # modified tokenize to also accept the PoS tags, it's important to understand that whilst the subj_type & obj_type are a single token, i.e. 'person' or 'organisation'
+            # the PoS tags could be a list of length > 1. This may cause some issues when representing the the start-subject, end-subject, start-object & end-object as
+            # their own distinct tags (i.e. [SUB-PERSON-NNP-NNP-NNP] jon anthony dil [/SUB-PERSON-NNP-NNP-NNP]) due to the creeping tag length
+            # Further: using an alternative representation may shorten the observable context, i.e. '@ * person : nnp + nnp + nnp * jon anthony dil @'
+            # TODO: go back and read through the papers again on the various models we're using here to understand the implications of these various changes in more depth
+            input_ids, new_ss, new_os = self.tokenize(tokens, d['subj_type'], d['obj_type'], ss, se, os, oe, pos_tags=d['stanford_pos']) # <-- CHANGES
             rel = self.LABEL_TO_ID[d['relation']]
 
             feature = {
@@ -178,7 +267,8 @@ class RETACREDProcessor(Processor):
             tokens = d['token']
             tokens = [convert_token(token) for token in tokens]
 
-            input_ids, new_ss, new_os = self.tokenize(tokens, d['subj_type'], d['obj_type'], ss, se, os, oe)
+            # modified tokenize to also accept the PoS tags
+            input_ids, new_ss, new_os = self.tokenize(tokens, d['subj_type'], d['obj_type'], ss, se, os, oe, pos_tags=d['stanford_pos']) # <-- CHANGES
             rel = self.LABEL_TO_ID[d['relation']]
 
             feature = {

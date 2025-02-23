@@ -94,7 +94,7 @@ def main():
 
     parser.add_argument("--data_dir", default="./data/retacred", type=str)
     parser.add_argument("--model_name_or_path", default="roberta-large", type=str)
-    parser.add_argument("--input_format", default="typed_entity_marker_punct", type=str,
+    parser.add_argument("--input_format", default="typed_entity_marker_pos_punct", type=str,
                         help="in [entity_mask, entity_marker, entity_marker_punct, typed_entity_marker, typed_entity_marker_punct]")
 
     parser.add_argument("--config_name", default="", type=str,
