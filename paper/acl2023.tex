@@ -1,0 +1,193 @@
+% This must be in the first 5 lines to tell arXiv to use pdfLaTeX, which is strongly recommended.
+\pdfoutput=1
+% In particular, the hyperref package requires pdfLaTeX in order to break URLs across lines.
+
+\documentclass[11pt]{article}
+
+% Remove the "review" option to generate the final version.
+\usepackage{ACL2023}
+\usepackage{mathptmx}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+
+% For proper rendering and hyphenation of words containing Latin characters (including in bib files)
+\usepackage[T1]{fontenc}
+% For Vietnamese characters
+% \usepackage[T5]{fontenc}
+% See https://www.latex-project.org/help/documentation/encguide.pdf for other character sets
+
+% This assumes your files are encoded as UTF8
+\usepackage[utf8]{inputenc}
+
+% This is not strictly necessary, and may be commented out.
+% However, it will improve the layout of the manuscript,
+% and will typically save some space.
+\usepackage{microtype}
+
+% This is also not strictly necessary, and may be commented out.
+% However, it will improve the aesthetics of text in
+% the typewriter font.
+\usepackage{inconsolata}
+
+% USER DEFINED - START
+\usepackage{orcidlink}
+% USER DEFINED - END
+
+% If the title and author information does not fit in the area allocated, uncomment the following
+% --> REQUIRED DUE TO AUTHORS & EMAILS NOT FITTING <---
+\setlength\titlebox{7cm}
+% and set <dim> to something 5cm or larger.
+
+\title{PoSTACked: Stacked Encoders \& C-GCN Relation Extraction}
+
+% Author information can be set in various styles:
+% For several authors from the same institution:
+% \author{Author 1 \and ... \and Author n \\
+%         Address line \\ ... \\ Address line}
+% if the names do not fit well on one line use
+%         Author 1 \\ {\bf Author 2} \\ ... \\ {\bf Author n} \\
+% For authors from different institutions:
+% \author{Author 1 \\ Address line \\  ... \\ Address line
+%         \And  ... \And
+%         Author n \\ Address line \\ ... \\ Address line}
+% To start a seperate ``row'' of authors use \AND, as in
+\author{Jonathon Dilworth \orcidlink{0009-0009-0260-0492} \\ 
+        Department of Computer Science \\
+        University of Manchester \\
+        \texttt{\small{jonathon.dilworth@postgrad.manchester.ac.uk}} \\\And
+        Emma O'Brien \\
+        Department of Computer Science \\
+        University of Manchester \\
+        \texttt{\small{emma.obrien@postgrad.manchester.ac.uk}}
+        \AND
+        Rojs Aktumanis \\
+        Department of Computer Science \\ 
+        University of Manchester \\
+        \texttt{\small{rojs.aktumanis@postgrad.manchester.ac.uk}} \\\And
+        Alexandros Michaelides \orcidlink{0009-0004-8430-8930} \\
+        Department of Computer Science \\ 
+        University of Manchester \\
+        \texttt{\small{alex.michaelides@postgrad.manchester.ac.uk}}}
+
+% \author{Jonathon Dilworth \\
+%   University of \\Manchester \\
+%   \texttt{jonathon.dilworth@postgrad.manchester.ac.uk} \\\And
+%   Emma O'Brien \\
+%   University of \\Manchester \\
+%   \texttt{@postgrad.manchester.ac.uk} 
+%   \And
+%   Rojs Aktumanis \\
+%   University of \\Manchester \\
+%   \texttt{@postgrad.manchester.ac.uk} \\\And
+%   Alexandros Michaelides \\
+%   University of \\Manchester \\
+%   \texttt{@postgrad.manchester.ac.uk} \\}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Here be abstract in \LaTeX. \emph{Note: This document is mainly boilerplate for the time being. The quality of the writing is, as of present, pretty low. It's simply here to act as a 'starting position' for us to work from.}
+\end{abstract}
+
+\section{Introduction}
+
+Inspired by the text-mining course textbook\cite{a-2022-automating}:
+
+\begin{quote}
+"The last thing one discovers in composing a work is what to put first."
+― Blaise Pascal, Pensées (1670)
+\end{quote}
+
+\subsection{Motivation}
+
+While relation extraction (RE) tasks exist beyond non-overlapping sentence-level RE\footnote{i.e. entity-overlap, cross-document, cross-lingual, multi-modal: \url{https://dl.acm.org/doi/10.1145/3674501}}, we observe that there are still many potential challanges to be solved within this research area \cite{zhou-chen-2022-improved}. 
+
+\subsection{Problem Statement}
+
+Vanilla SpanBERT was state-of-the-art (SOTA) for relation extraction (RE) on TACRED/TACREV/Re-TACRED at the time of publication. Named entity-type masking has since been shown to improve performance for downstream RE. Thus, including token/subtoken/span level features during fine-tuning a pre-trained model (PLM) seems to improves downstream performance on RE tasks. To the best of our knowledge, nobody has yet tried including PoS tags within the masking procedure during pre-training of SpanBERT, fine-tuning of BERT or RoBERTa. As such, we hypothesise that adding token level part-of-speech (PoS) tags in the masking process during pre-training (in SpanBERT) and fine-tuning (in BERT \& RoBERTa) may lead to a performance benefit during downstream RE.
+
+\subsubsection{Hypotheses}
+
+\begin{itemize}
+    \item \textbf{H1.} Including PoS tags or dependency relationships in addition to named entity tags during the masking procedure in pre-training \& fine-tuning will yield some performance benefit in downstream sentance-level RE.
+    \item \textbf{H2.} Including syntactic features (such as PoS tags and dependency relationships) as encoded features within the embeddings produced during fine-tuning will reduce the initial warm-up time required for downstream relation extraction.
+    \item \textbf{H3.} \emph{Reserved for RE Method 2}
+    \item \textbf{H4.} \emph{Reserved for RE Method 2}
+\end{itemize}
+
+\subsection{Contributions}
+
+Typical Boilerplate.
+
+\section{Related Work}
+
+\emph{References be here!}
+
+\section{Methodology}
+
+\subsection{Data}
+
+\textbf{Current notes:} Authors argue for the proposed method of using 'mechanical turk' to produce a dataset for supervised relation extraction as an alternative to datasets obtained through distant supervision. The claim being made is that distant supervision introduces a lot of noisy data into the training process. However, it has since been shown that their use of 'mechanical turk' also led to a large amount of noisy (and inaccurate) data being introduced into the dataset as discussed in \cite{alt, garbeyszak and henning, 2020} and Re-TACRED.
+
+Whilst ReTACRED employted a similar means of obtaining annotated data, namely, crowdsourcing via 'mechanical turk', various data quality mechanisms were aplied to the annotation task. This has been shown to improve inter-annotator Fleiss kappa by .23 compared with the oriignal dataset \cite{xhang et al 2017}. In addition, it has been demonstrated that the re-annotated version of TACRED provides $F_{1}$ score improvements across a varity of downstream relation extraction models \cite{ref3, ref4, ref5}.
+
+
+\subsection{Experimental Design}
+
+Typical Boilerplate.
+
+\section{Experiments}
+
+Typical Boilerplate.
+
+\subsection{Experimental Setup}
+
+\emph{\textbf{TODO:} Consider moving experimental setup to the appendecies?}
+
+I'm uncertain of whether experimental setup $\equiv$ experimental design. If so, then it can be left here for sure.
+
+\section{Results \& Analysis}
+
+Typical boilerplate\cite{-casacuberta-2022-shot}.
+
+\section{Discussion}
+
+Typical boilerplate.
+
+\section{Conclusion \& Future Work}
+
+Typical boilerplate.
+
+\section*{Limitations}
+
+\textit{ACL 2023 requires all submissions to have a section titled ``Limitations'', for discussing the limitations of the paper as a complement to the discussion of strengths in the main text. This section should occur after the conclusion, but before the references. It will not count towards the page limit.
+The discussion of limitations is mandatory. Papers without a limitation section will be desk-rejected without review.}
+
+\textit{While we are open to different types of limitations, just mentioning that a set of results have been shown for English only probably does not reflect what we expect. 
+Mentioning that the method works mostly for languages with limited morphology, like English, is a much better alternative.}
+
+\textbf{"In addition, limitations such as low scalability to long text, the requirement of large GPU resources, or other things that inspire crucial further investigation are welcome"} \textit{is a good limitations example.}
+
+\section*{Ethics Statement}
+We confirm that all work presented within this research complies with the ACL Ethics Policy.\footnote{\url{https://www.aclweb.org/portal/content/acl-code-ethics}}. \textit{\textbf{TODO:} Potentially include this section, commenting on the broader impact of the work, or other ethical considerations after the conclusion but before the references. The ethics statement will not count toward the page limit (8 pages for long, 4 pages for short papers).}
+
+\section*{Acknowledgements}
+\emph{do we require} any \emph{acknowledgements}?
+
+% Entries for the entire Anthology, followed by custom entries
+\bibliography{anthology,custom}
+\bibliographystyle{acl_natbib}
+
+\appendix
+
+\section{Example Appendix}
+\label{sec:appendix}
+
+This is a section in the appendix.
+
+\end{document}
+
