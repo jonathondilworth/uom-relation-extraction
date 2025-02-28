@@ -19,7 +19,7 @@ from utils import torch_utils, scorer, constant, helper
 from utils.vocab import Vocab
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', type=str, default='dataset/tacred')
+parser.add_argument('--data_dir', type=str, default='../data/retacred')
 parser.add_argument('--vocab_dir', type=str, default='dataset/vocab')
 parser.add_argument('--emb_dim', type=int, default=300, help='Word embedding dimension.')
 parser.add_argument('--ner_dim', type=int, default=30, help='NER embedding dimension.')
@@ -94,9 +94,9 @@ assert emb_matrix.shape[1] == opt['emb_dim']
 
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
-train_batch = DataLoader(opt['data_dir'] + '/train_full.json', opt['batch_size'], opt, vocab, evaluation=False)
-dev_batch = DataLoader(opt['data_dir'] + '/dev_full.json', opt['batch_size'], opt, vocab, evaluation=True)
-test_batch = DataLoader(opt['data_dir'] + '/test_full.json', opt['batch_size'], opt, vocab, evaluation=True)
+train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt, vocab, evaluation=False)
+dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt, vocab, evaluation=True)
+test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt, vocab, evaluation=True)
 
 model_id = opt['id'] if len(opt['id']) > 1 else '0' + opt['id']
 model_save_dir = opt['save_dir'] + '/' + model_id
