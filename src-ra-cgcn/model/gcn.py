@@ -11,6 +11,11 @@ import numpy as np
 from model.tree import Tree, head_to_tree, tree_to_adj
 from utils import constant, torch_utils
 
+# --------------------------- ADDED CODE ----------------------------
+from torchtune.modules import RotaryPositionalEmbeddings
+# -------------------------------------------------------------------
+
+
 class GCNClassifier(nn.Module):
     """ A wrapper classifier for GCNRelationModel. """
     def __init__(self, opt, emb_matrix=None):
@@ -45,11 +50,48 @@ class GCNRelationModel(nn.Module):
         self.gcn = GCN(opt, embeddings, opt['hidden_dim'], opt['num_layers'])
 
         # output mlp layers
-        in_dim = opt['hidden_dim']*3
+        # ------------------------- ADAPTATIONS ---------------------------
+        # a sentence is embedded by a vector of length opt['hidden_dim']
+        if opt['use_sentence_emb']:
+            in_dim = opt['hidden_dim']*3
+        else:
+            in_dim = opt['hidden_dim']*2
+        # -----------------------------------------------------------------
+        
         layers = [nn.Linear(in_dim, opt['hidden_dim']), nn.ReLU()]
         for _ in range(self.opt['mlp_layers']-1):
             layers += [nn.Linear(opt['hidden_dim'], opt['hidden_dim']), nn.ReLU()]
         self.out_mlp = nn.Sequential(*layers)
+        
+        # --------------------------- ADDED CODE ----------------------------
+        # create an attention layer
+        if opt['attention']:
+            # rotary positional encoding
+            if opt['positional_emb'] == 'rot':
+                # embedding per head
+                self.posit_emb = RotaryPositionalEmbeddings(opt['hidden_dim'] // opt['num_heads'])
+                
+            if opt['pool_before_attention']:
+                # create separate attention blocks for subject, object and optionally sentence
+                self.mh_attention_subj = torch.nn.MultiheadAttention(embed_dim=opt['hidden_dim'],
+                                                                     num_heads=opt['num_heads'],
+                                                                     dropout=opt['attention_dropout'],
+                                                                     batch_first=True)
+                self.mh_attention_obj = torch.nn.MultiheadAttention(embed_dim=opt['hidden_dim'],
+                                                                    num_heads=opt['num_heads'],
+                                                                    dropout=opt['attention_dropout'],
+                                                                    batch_first=True)
+                if opt['use_sentence_emb']:
+                    self.mh_attention_sent = torch.nn.MultiheadAttention(embed_dim=opt['hidden_dim'],
+                                                                         num_heads=opt['num_heads'],
+                                                                         dropout=opt['attention_dropout'],
+                                                                         batch_first=True)
+            else:
+                self.mh_attention = torch.nn.MultiheadAttention(embed_dim=opt['hidden_dim'],
+                                                                num_heads=opt['num_heads'],
+                                                                dropout=opt['attention_dropout'],
+                                                                batch_first=True)
+        # -------------------------------------------------------------------
 
     def init_embeddings(self):
         if self.emb_matrix is None:
@@ -87,11 +129,85 @@ class GCNRelationModel(nn.Module):
         # pooling
         subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
         pool_type = self.opt['pooling']
-        h_out = pool(h, pool_mask, type=pool_type)
-        subj_out = pool(h, subj_mask, type=pool_type)
-        obj_out = pool(h, obj_mask, type=pool_type)
-        outputs = torch.cat([h_out, subj_out, obj_out], dim=1)
-        outputs = self.out_mlp(outputs)
+        
+        # ------------------------ ADAPTATIONS ---------------------------
+        if self.opt['positional_emb'] == 'rot':
+            # [b, m, h] -> [b, m, heads, h per head]
+            h = h.unflatten(-1, (self.opt['num_heads'], self.opt['hidden_dim'] // self.opt['num_heads']))
+            # apply positional embeddings
+            h = self.posit_emb(h)
+            # collapse heads
+            h = h.flatten(-2)
+        
+        h_out = None
+        if self.opt['pool_before_attention']:
+            if self.opt['use_sentence_emb']:
+                h_out = pool(h, pool_mask, type=pool_type)
+            subj_out = pool(h, subj_mask, type=pool_type)
+            obj_out = pool(h, obj_mask, type=pool_type)
+        # -----------------------------------------------------------------
+        
+        # --------------------------- MY CODE ----------------------------
+        if self.opt['attention']:
+            if self.opt['pool_before_attention']:
+                # cross-attention
+                # ([b, h], [b, h]) -> ([b, 1, h], [b, 1, h]) -> [b, 2, h]
+                queries = torch.cat((subj_out.unsqueeze(1), obj_out.unsqueeze(1)), dim=1)
+                if self.opt['use_sentence_emb']:
+                    # ([b, 2, h], [b, 1, h]) -> [b, 3, h]
+                    queries = torch.cat((queries, h_out.unsqueeze(1)), dim=1)
+                
+                # [b, h] -> [b, 1, h]
+                query_subj = subj_out.unsqueeze(1)
+                query_obj = obj_out.unsqueeze(1)
+                # get attention values for subject and object
+                attn_subj, _ = self.mh_attention_subj(query=query_subj, key=h, value=h, key_padding_mask=pool_mask.squeeze(-1))
+                attn_obj, _ = self.mh_attention_obj(query=query_obj, key=h, value=h, key_padding_mask=pool_mask.squeeze(-1))
+                # residual connection
+                attn_subj = query_subj + attn_subj
+                attn_obj = query_obj + attn_obj
+                
+                # [b, 1, h]; [b, 1, h] -> [b, 2, h]
+                mlp_inputs = torch.cat((attn_subj, attn_obj), dim=1)
+                
+                # sentence embeddings
+                if self.opt['use_sentence_emb']:
+                    # [b, h] -> [b, 1, h]
+                    query_sent = h_out.unsqueeze(1)
+                    # get attention values for sentence
+                    attn_sent, _ = self.mh_attention_sent(query=query_sent, key=h, value=h, key_padding_mask=pool_mask.squeeze(-1))
+                    # residual
+                    attn_sent = query_sent + attn_sent
+                    # [b, 2, h]; [b, 1, h] -> [b, 3, h]
+                    mlp_inputs = torch.cat((mlp_inputs, attn_sent), dim=1)
+                
+                # [b, c, h] -> [b, c*h]
+                mlp_inputs = mlp_inputs.flatten(-2)
+            else:
+                # self-attention
+                attn_out, _ = self.mh_attention(query=h, key=h, value=h, key_padding_mask=pool_mask.squeeze(-1))
+                # residual
+                attn_out = h + attn_out
+                # pool after attention
+                subj_out = pool(attn_out, subj_mask, type=pool_type)
+                obj_out = pool(attn_out, obj_mask, type=pool_type)
+                mlp_inputs = torch.cat((subj_out, obj_out), dim=1)
+                if self.opt['use_sentence_emb']:
+                    h_out = pool(attn_out, pool_mask, type=pool_type)
+                    mlp_inputs = torch.cat((mlp_inputs, h_out), dim=1)
+        else:
+            mlp_inputs = torch.cat([subj_out, obj_out], dim=1)
+            if self.opt['use_sentence_emb']:
+                mlp_inputs = torch.cat((mlp_inputs, h_out), dim=1)
+        
+        # run classification mlp
+        outputs = self.out_mlp(mlp_inputs)
+        # initialize h_out as the vector of zeros to conform with the existing architecture in the case
+        # that we do not use sentence embeddings
+        if h_out is None:
+            h_out = torch.zeros((h.shape[0], self.opt['hidden_dim']))
+        # -----------------------------------------------------------------
+        
         return outputs, h_out
 
 class GCN(nn.Module):
@@ -132,7 +248,10 @@ class GCN(nn.Module):
 
     def encode_with_rnn(self, rnn_inputs, masks, batch_size):
         seq_lens = list(masks.data.eq(constant.PAD_ID).long().sum(1).squeeze())
-        h0, c0 = rnn_zero_state(batch_size, self.opt['rnn_hidden'], self.opt['rnn_layers'])
+        # ------------------------ ADAPTATIONS ----------------------------
+        # allow the pipeline to run without cuda
+        h0, c0 = rnn_zero_state(batch_size, self.opt['rnn_hidden'], self.opt['rnn_layers'], use_cuda=self.opt.get('cuda', False))
+        # ------------------------------------------------------------------
         rnn_inputs = nn.utils.rnn.pack_padded_sequence(rnn_inputs, seq_lens, batch_first=True)
         rnn_outputs, (ht, ct) = self.rnn(rnn_inputs, (h0, c0))
         rnn_outputs, _ = nn.utils.rnn.pad_packed_sequence(rnn_outputs, batch_first=True)
