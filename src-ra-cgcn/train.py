@@ -93,6 +93,11 @@ opt = vars(args)
 label2id = constant.LABEL_TO_ID
 opt['num_class'] = len(label2id)
 
+# --------------------------- MY CODE ----------------------------
+# check if we can split hidden dim into heads
+assert opt['hidden_dim'] % opt['num_heads'] == 0
+# ----------------------------------------------------------------
+
 # load vocab
 vocab_file = opt['vocab_dir'] + '/vocab.pkl'
 vocab = Vocab(vocab_file, load=True)
