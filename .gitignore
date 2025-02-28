@@ -12,6 +12,9 @@ data/tacrev/*
 notebooks/experimental/models/*
 notebooks/models
 
+# C-GCN generated embeddings and vocabulary
+src-ra-cgcn/dataset/*
+
 # Mac specific files
 .DS_Store
 .AppleDouble
