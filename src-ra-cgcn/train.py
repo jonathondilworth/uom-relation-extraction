@@ -67,6 +67,16 @@ parser.add_argument('--cpu', action='store_true', help='Ignore CUDA.')
 parser.add_argument('--load', dest='load', action='store_true', help='Load pretrained model.')
 parser.add_argument('--model_file', type=str, help='Filename of the pretrained model.')
 
+# --------------------------- ADDED CODE ----------------------------
+# running with default arguments will result in running the original (C-)GCN model
+parser.add_argument('--attention', type=bool, default=False, help='Use or not use the modified codebase with attention after GCN')
+parser.add_argument('--pool_before_attention', type=bool, default=True, help='Pooling before attention uses subject and object pooled embeddings as queries; pooling after attention applies self attention first')
+parser.add_argument('--positional_emb', choices=['none', 'rot'], default='none', help='Type of positional embeddings to add before executing attention')
+parser.add_argument('--use_sentence_emb', type=bool, default=True, help='Whether we use the sentence embeddings as input into MLP classifier')
+parser.add_argument('--num_heads', type=int, default=8, help='Number of attention heads to use for the attention block. Only used if attention is True')
+parser.add_argument('--attention_dropout', type=float, default=0.01, help='Dropout for the attention layers. Only used if attention is True')
+# ----------------------------------------------------------------
+
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
