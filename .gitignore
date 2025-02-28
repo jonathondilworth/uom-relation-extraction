@@ -12,8 +12,11 @@ data/tacrev/*
 notebooks/experimental/models/*
 notebooks/models
 
-# C-GCN generated embeddings and vocabulary
+# C-GCN 
+# generated embeddings and vocabulary
 src-ra-cgcn/dataset/*
+# saved models
+src-ra-cgcn/saved_models/*
 
 # Mac specific files
 .DS_Store
