@@ -73,7 +73,7 @@ parser.add_argument('--attention', type=bool, default=False, help='Use or not us
 parser.add_argument('--pool_before_attention', type=bool, default=True, help='Pooling before attention uses subject and object pooled embeddings as queries; pooling after attention applies self attention first')
 parser.add_argument('--positional_emb', choices=['none', 'rot'], default='none', help='Type of positional embeddings to add before executing attention')
 parser.add_argument('--use_sentence_emb', type=bool, default=True, help='Whether we use the sentence embeddings as input into MLP classifier')
-parser.add_argument('--num_heads', type=int, default=8, help='Number of attention heads to use for the attention block. Only used if attention is True')
+parser.add_argument('--num_heads', type=int, default=4, help='Number of attention heads to use for the attention block. Only used if attention is True')
 parser.add_argument('--attention_dropout', type=float, default=0.01, help='Dropout for the attention layers. Only used if attention is True')
 # ----------------------------------------------------------------
 
@@ -93,9 +93,12 @@ opt = vars(args)
 label2id = constant.LABEL_TO_ID
 opt['num_class'] = len(label2id)
 
-# --------------------------- MY CODE ----------------------------
+# --------------------------- ADDED CODE ----------------------------
 # check if we can split hidden dim into heads
 assert opt['hidden_dim'] % opt['num_heads'] == 0
+# necessary for rotatory positional embeddings
+if opt['positional_emb'] == 'rot':
+    assert (opt['hidden_dim'] // opt['num_heads']) % 2 == 0
 # ----------------------------------------------------------------
 
 # load vocab
