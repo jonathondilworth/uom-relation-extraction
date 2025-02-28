@@ -126,7 +126,7 @@ class GCNRelationModel(nn.Module):
         adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data)
         h, pool_mask = self.gcn(adj, inputs)
         
-        # pooling
+        # masks
         subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
         pool_type = self.opt['pooling']
         
@@ -140,7 +140,7 @@ class GCNRelationModel(nn.Module):
             h = h.flatten(-2)
         
         h_out = None
-        if self.opt['pool_before_attention']:
+        if self.opt['pool_before_attention'] or not self.opt['attention']:
             if self.opt['use_sentence_emb']:
                 h_out = pool(h, pool_mask, type=pool_type)
             subj_out = pool(h, subj_mask, type=pool_type)

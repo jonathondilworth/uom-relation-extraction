@@ -68,11 +68,22 @@ parser.add_argument('--load', dest='load', action='store_true', help='Load pretr
 parser.add_argument('--model_file', type=str, help='Filename of the pretrained model.')
 
 # --------------------------- ADDED CODE ----------------------------
+# code to parse boolean arguments
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() == 'false':
+        return False
+    elif v.lower() == 'true':
+        return True
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 # running with default arguments will result in running the original (C-)GCN model
-parser.add_argument('--attention', type=bool, default=False, help='Use or not use the modified codebase with attention after GCN')
-parser.add_argument('--pool_before_attention', type=bool, default=True, help='Pooling before attention uses subject and object pooled embeddings as queries; pooling after attention applies self attention first')
+parser.add_argument('--attention', type=str2bool, default=False, help='Use or not use the modified codebase with attention after GCN')
+parser.add_argument('--pool_before_attention', type=str2bool, default=True, help='Pooling before attention uses subject and object pooled embeddings as queries; pooling after attention applies self attention first')
 parser.add_argument('--positional_emb', choices=['none', 'rot'], default='none', help='Type of positional embeddings to add before executing attention')
-parser.add_argument('--use_sentence_emb', type=bool, default=True, help='Whether we use the sentence embeddings as input into MLP classifier')
+parser.add_argument('--use_sentence_emb', type=str2bool, default=True, help='Whether we use the sentence embeddings as input into MLP classifier')
 parser.add_argument('--num_heads', type=int, default=4, help='Number of attention heads to use for the attention block. Only used if attention is True')
 parser.add_argument('--attention_dropout', type=float, default=0.01, help='Dropout for the attention layers. Only used if attention is True')
 # ----------------------------------------------------------------
