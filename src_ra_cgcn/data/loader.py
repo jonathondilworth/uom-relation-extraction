@@ -113,6 +113,108 @@ class DataLoader(object):
     def __iter__(self):
         for i in range(self.__len__()):
             yield self.__getitem__(i)
+            
+            
+# --------------------------- NEW CODE ---------------------------        
+        
+class DataLoaderPredict(DataLoader):
+    """
+    TODO: create documentation
+    """
+    # --------------- ADAPTATIONS ---------------
+    def __init__(self, data: list, opt, vocab):
+        batch_size = len(data)
+        self.batch_size = batch_size # only one batch
+        # ---------------------------------------
+        self.opt = opt
+        self.vocab = vocab
+        self.label2id = constant.LABEL_TO_ID
+
+        self.raw_data = data
+        # the preprocess method differs from original by not including relation
+        data = self.preprocess(data, vocab, opt)
+
+        self.id2label = dict([(v,k) for k,v in self.label2id.items()])
+        self.num_examples = len(data)
+
+        self.data = [data]
+
+    def preprocess(self, data, vocab, opt):
+        """ Preprocess the data and convert to ids. """
+        # TODO: create documentation (added comments, and removed relation stuff)
+        processed = []
+        for d in data:
+            tokens = list(d['token'])
+            if opt['lower']:
+                tokens = [t.lower() for t in tokens]
+            # anonymize tokens
+            ss, se = d['subj_start'], d['subj_end']
+            os, oe = d['obj_start'], d['obj_end']
+            tokens[ss:se+1] = ['SUBJ-'+d['subj_type']] * (se-ss+1)
+            tokens[os:oe+1] = ['OBJ-'+d['obj_type']] * (oe-os+1)
+            # map tokens, parts of speech and named entities to IDs
+            tokens = map_to_ids(tokens, vocab.word2id)
+            pos = map_to_ids(d['stanford_pos'], constant.POS_TO_ID)
+            ner = map_to_ids(d['stanford_ner'], constant.NER_TO_ID)
+            deprel = map_to_ids(d['stanford_deprel'], constant.DEPREL_TO_ID)
+            # extract dependency tree
+            head = [int(x) for x in d['stanford_head']]
+            # ensure we have a root for the dependency tree
+            assert any([x == 0 for x in head])
+            # create position sequences for the distances from each word to subj and obj
+            l = len(tokens)
+            subj_positions = get_positions(d['subj_start'], d['subj_end'], l)
+            obj_positions = get_positions(d['obj_start'], d['obj_end'], l)
+            # map named entity types to IDs
+            subj_type = [constant.SUBJ_NER_TO_ID[d['subj_type']]]
+            obj_type = [constant.OBJ_NER_TO_ID[d['obj_type']]]
+            # --------------- ADAPTATIONS ---------------
+            # no relation is included in the data as this is unknown in prediction
+            # so we add None as the last element as this simplifies adaptation to the codebase
+            processed += [(tokens, pos, ner, deprel, head, subj_positions, obj_positions, subj_type, obj_type, None)]
+            # -------------------------------------------
+        return processed
+
+    def gold(self):
+        # removing this method as it does not make sense anymore
+        raise NotImplementedError("Method should not be called")
+
+    def __getitem__(self, key):
+        """ Get a batch with index. """
+        if not isinstance(key, int):
+            raise TypeError
+        if key < 0 or key >= len(self.data):
+            raise IndexError
+        batch = self.data[key]
+        batch_size = len(batch)
+        batch = list(zip(*batch))
+        
+        assert len(batch) == 10
+
+        # sort all fields by lens for easy RNN operations
+        lens = [len(x) for x in batch[0]]
+        batch, orig_idx = sort_all(batch, lens)
+
+        words = batch[0]
+        # convert to tensors
+        words = get_long_tensor(words, batch_size)
+        masks = torch.eq(words, 0)
+        pos = get_long_tensor(batch[1], batch_size)
+        ner = get_long_tensor(batch[2], batch_size)
+        deprel = get_long_tensor(batch[3], batch_size)
+        head = get_long_tensor(batch[4], batch_size)
+        subj_positions = get_long_tensor(batch[5], batch_size)
+        obj_positions = get_long_tensor(batch[6], batch_size)
+        subj_type = get_long_tensor(batch[7], batch_size)
+        obj_type = get_long_tensor(batch[8], batch_size)
+
+        # --------------- ADAPTATIONS ---------------
+        # removed relation from return, instead do None to conform to the codebase
+        return (words, masks, pos, ner, deprel, head, subj_positions, obj_positions, subj_type, obj_type, None, orig_idx)
+        # -------------------------------------------
+    
+# --------------------------------------------------------------------
+
 
 def map_to_ids(tokens, vocab):
     ids = [vocab[t] if t in vocab else constant.UNK_ID for t in tokens]

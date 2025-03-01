@@ -92,16 +92,25 @@ class GCNTrainer(Trainer):
         self.optimizer.step()
         return loss_val
 
-    def predict(self, batch, unsort=True):
+    # --------------- ADAPTATIONS ---------------
+    def predict(self, batch, unsort=True, test=False):
+        # added an option to not calculate the loss
+        # ---------------------------------------
         inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
         orig_idx = batch[11]
         # forward
         self.model.eval()
         logits, _ = self.model(inputs)
-        loss = self.criterion(logits, labels)
+        # ---------------- ADAPTATION ----------------
+        # only calculate loss when we are not using the model for testing
+        if test:
+            loss = None
+        else:
+            loss = self.criterion(logits, labels).item()
+        # -------------------------------------------
         probs = F.softmax(logits, 1).data.cpu().numpy().tolist()
         predictions = np.argmax(logits.data.cpu().numpy(), axis=1).tolist()
         if unsort:
             _, predictions, probs = [list(t) for t in zip(*sorted(zip(orig_idx,\
                     predictions, probs)))]
-        return predictions, probs, loss.item()
+        return predictions, probs, loss
