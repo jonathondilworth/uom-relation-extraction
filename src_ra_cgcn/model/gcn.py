@@ -151,12 +151,7 @@ class GCNRelationModel(nn.Module):
         if self.opt['attention']:
             if self.opt['pool_before_attention']:
                 # cross-attention
-                # ([b, h], [b, h]) -> ([b, 1, h], [b, 1, h]) -> [b, 2, h]
-                queries = torch.cat((subj_out.unsqueeze(1), obj_out.unsqueeze(1)), dim=1)
-                if self.opt['use_sentence_emb']:
-                    # ([b, 2, h], [b, 1, h]) -> [b, 3, h]
-                    queries = torch.cat((queries, h_out.unsqueeze(1)), dim=1)
-                
+                              
                 # [b, h] -> [b, 1, h]
                 query_subj = subj_out.unsqueeze(1)
                 query_obj = obj_out.unsqueeze(1)
