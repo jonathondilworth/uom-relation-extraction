@@ -64,7 +64,15 @@ class GCNTrainer(Trainer):
         self.opt = opt
         self.emb_matrix = emb_matrix
         self.model = GCNClassifier(opt, emb_matrix=emb_matrix)
-        self.criterion = nn.CrossEntropyLoss()
+        ##############################################
+        #####          ALEX'S ADDITIONS          #####
+        ##############################################
+        if opt.get('focal_loss', False):
+            print("Using focal loss")
+            self.criterion = FocalLoss()
+        else:
+            self.criterion = nn.CrossEntropyLoss()
+        ##############################################
         self.parameters = [p for p in self.model.parameters() if p.requires_grad]
         if opt['cuda']:
             self.model.cuda()
@@ -105,3 +113,18 @@ class GCNTrainer(Trainer):
             _, predictions, probs = [list(t) for t in zip(*sorted(zip(orig_idx,\
                     predictions, probs)))]
         return predictions, probs, loss.item()
+
+##############################################
+#####          ALEX'S ADDITIONS          #####
+##############################################
+class FocalLoss(torch.nn.Module):
+    def __init__(self, gamma=2.0):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+        
+    def forward(self, input, target):
+        ce_loss = F.cross_entropy(input, target, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = (1 - pt)**self.gamma * ce_loss
+        return focal_loss.mean()
+##############################################
