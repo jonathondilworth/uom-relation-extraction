@@ -45,13 +45,16 @@ class Trainer(object):
             print("[Warning: Saving failed... continuing anyway.]")
 
 
-def unpack_batch(batch, cuda):
+def unpack_batch(batch, cuda, test=False):
+    # ---------------- ADAPTATION ----------------
+    # only use current label information during testing
     if cuda:
         inputs = [Variable(b.cuda()) for b in batch[:10]]
-        labels = Variable(batch[10].cuda())
+        labels = Variable(batch[10].cuda()) if not test else batch[10]
     else:
         inputs = [Variable(b) for b in batch[:10]]
-        labels = Variable(batch[10])
+        labels = Variable(batch[10]) if not test else batch[10]
+    # -------------------------------------------
     tokens = batch[0]
     head = batch[5]
     subj_pos = batch[6]
@@ -96,7 +99,7 @@ class GCNTrainer(Trainer):
     def predict(self, batch, unsort=True, test=False):
         # added an option to not calculate the loss
         # ---------------------------------------
-        inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
+        inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'], test)
         orig_idx = batch[11]
         # forward
         self.model.eval()
