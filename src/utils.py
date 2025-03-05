@@ -32,13 +32,6 @@ def collate_fn(batch):
 # CHANGES: model checkpointing
 # gcn-over-pruned-trees comes bundled with a nicer set of patterns (model checkpointing being one of them)
 # see: gcn-over-pruned-trees/utils/torch_utils.py
-# 
-# Some thoughts: was curious as to whether there was an existing component/way of doing this, as they utilise some
-# of the 'transformers' (HuggingFaces) library, I see they have a trainer class, where you can override the training_step(), etc
-# it looks like a much 'easier to use' workflow, but maybe it doesn't provide the requisite degree of customisability?
-# Might be worth looking at in the future. But for now, will have to implement this similar to gcn-over-pruned-trees
-# see trainer.py & torch_utils.py & utils/vocab.py in https://github.com/qipeng/gcn-over-pruned-trees
-#                                                     ^^ their codebase is a lot cleaner!
 #######
 
 # TODO: think about implementing a means of saving to a new directory when repeating experiments in a bash loop
@@ -61,15 +54,22 @@ def save_checkpoint(args, model, optimizer, scheduler, step):
         'optimizer_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict()
     }
+    # ^^
+    # we could save the config in the dump, but it would be kind of redundant, since we're dumping the config via AutoConfig
+    # see: line 221, 222 (train_tacred.py) & 228, 229 (train_retacred.py)
+    # might be a better design pattern to include it in the dump, not too sure about this though
 
     print(f"[ Trying to save checkpoint to: {checkpoint_fp} ] ... ")
 
-    # for now maybe we just want to let an exception be thrown for the stack trace
-    # try:
-    torch.save(params, checkpoint_fp)
-    print(f"model saved to: {checkpoint_fp}")
-    # except Exception:
-    #    print("[ Warning: saving failed... continuing anyway. ... ]")
+    # 'save' design pattern as outlined in:
+    # https://github.com/qipeng/gcn-over-pruned-trees/blob/master/utils/torch_utils.py
+    # ^ line 133
+
+    try:
+      torch.save(params, checkpoint_fp)
+      print(f"model saved to: {checkpoint_fp}")
+    except Exception:
+       print("[ Warning: saving failed... continuing anyway. ... ]")
 
 
 def save_best(args, model):
@@ -79,9 +79,10 @@ def save_best(args, model):
 
     best_model_dir = os.path.join(args.save_dir, f"best_model.pt")
 
-    # presumably, if we're saving the 'best' model, we're not neccesarily planning on continuing to train it
+    # <s>presumably, if we're saving the 'best' model, we're not neccesarily planning on continuing to train it</s>
+    # ^ maintaining consistent naming convention, model -> model_state_dict
     params = {
-        'model': model.state_dict()
+        'model_state_dict': model.state_dict()
     }
 
     try:
