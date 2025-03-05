@@ -14,10 +14,6 @@ notebooks/models
 
 # C-GCN 
 # generated embeddings and vocabulary
-src-ra-cgcn/dataset/*
-# saved models
-src-ra-cgcn/saved_models/*
-# generated embeddings and vocabulary
 src_ra_cgcn/dataset/*
 # saved models
 src_ra_cgcn/saved_models/*
