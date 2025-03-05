@@ -1,5 +1,6 @@
 import os
 import torch
+import argparse
 from transformers import AutoConfig, AutoTokenizer
 from torch.utils.data import DataLoader
 from prepro import RETACREDProcessor
@@ -7,12 +8,12 @@ from model import REModel
 from utils import set_seed, collate_fn
 import torch.nn.functional as F
 
-# I'm just spoofing/mocking the arguments for the time being
-class arguments:
+
+class ModelArguments:
   def __init__(self, args=None):
     if args:
-      for k, v in args:
-        self.k = v
+      for k, v in vars(args).items():
+        setattr(self, k, v)
     else:
       self.data_dir = "./data/retacred"
       self.model_name_or_path = "saved_models_ber_base/best_model.pt"
@@ -21,11 +22,38 @@ class arguments:
       self.test_batch_size = 32
       self.num_classes = 40
       self.dropout_prob = 0.1
-      self.load_path = "saved_models_ber_base"
+      self.load_path = "saved_models_ber_base" 
       self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
       self.n_gpu = torch.cuda.device_count()
       self.seed = 42
       self.num_class = 40
+class UserInput:
+  def __init__(self, args):
+    self.sentence = args.sentence
+    self.tokens = args.tokens.split(",")
+    self.pos = args.pos.split(",")
+    self.deprel = args.deprel.split(",")
+    self.subj_start = args.subj_start
+    self.subj_end = args.subj_end
+    self.obj_start = args.obj_start
+    self.obj_end = args.obj_end
+    self.subj_type = args.subj_type
+    self.obj_type = args.obj_type
+
+
+def get_user_input():
+  parser = argparse.ArgumentParser(description="Run inference for relation extraction")
+  parser.add_argument("--sentence", type=str, required=True, help="Input sentence")
+  parser.add_argument("--tokens", type=str, required=True, help="Comma-separated list of tokens")
+  parser.add_argument("--pos", type=str, required=True, help="Comma-separated list of POS tags")
+  parser.add_argument("--deprel", type=str, required=True, help="Comma-separated list of dependency relations")
+  parser.add_argument("--subj_start", type=int, required=True, help="Start index of subject entity")
+  parser.add_argument("--subj_end", type=int, required=True, help="End index of subject entity")
+  parser.add_argument("--obj_start", type=int, required=True, help="Start index of object entity")
+  parser.add_argument("--obj_end", type=int, required=True, help="End index of object entity")
+  parser.add_argument("--subj_type", type=str, required=True, help="Type of subject entity")
+  parser.add_argument("--obj_type", type=str, required=True, help="Type of object entity")
+  return parser.parse_args()
 
 
 # see: https://stackoverflow.com/questions/45384684/replace-all-nonzero-values-by-zero-and-all-zero-values-by-a-specific-value
@@ -64,8 +92,10 @@ def collate_single(input_ids, ss, os, max_seq_length=512):
   return input_ids_tensor, attention_tensor, ss_tensor, os_tensor
 
 def main():
+  user_args = get_user_input()
+  user_input = UserInput(user_args)
 
-  args = arguments()
+  args = ModelArguments()
   set_seed(args)
 
   # implemented currently for retacred - TODO: update this so its 'modifiable'
@@ -74,70 +104,10 @@ def main():
   # load config, a lot of the same as inference.py
   config = AutoConfig.from_pretrained(args.load_path)
   tokenizer = AutoTokenizer.from_pretrained(args.load_path)
-
-  # input_ids, labels, ss, os
-  example_sentance = "He has served as a policy aide to the late U.S. Senator Alan Cranston , as National Issues Director for the 2004 presidential campaign of Congressman Dennis Kucinich , as a co-founder of Progressive Democrats of America and as a member of the international policy department at the RAND Corporation think tank before all that ."
-  example_tokens = [ "He", "has", "served", "as", "a", "policy", "aide", "to", "the", "late", "U.S.",
-                    "Senator", "Alan", "Cranston", ",", "as", "National", "Issues", "Director", "for", "the", "2004", 
-                    "presidential", "campaign", "of", "Congressman", "Dennis", "Kucinich", ",", "as", "a", "co-founder", "of", 
-                    "Progressive", "Democrats", "of", "America", "and", "as", "a", "member", "of", "the", "international", 
-                    "policy", "department", "at", "the", "RAND", "Corporation", "think", "tank", "before", "all", "that", "." ]
-  example_pos = [ "PRP", "VBZ", "VBN", "IN", "DT", "NN", "NN", "TO", "DT", "JJ", "NNP", 
-                  "NNP", "NNP", "NNP", ",", "IN", "NNP", "NNP", "NNP", "IN", "DT", "CD",
-                  "JJ", "NN", "IN", "NNP", "NNP", "NNP", ",", "IN", "DT", "NN", "IN", 
-                  "NNP", "NNPS", "IN", "NNP", "CC", "IN", "DT", "NN", "IN", "DT", "JJ", 
-                  "NN", "NN", "IN", "DT", "NNP", "NNP", "VB", "NN", "IN", "DT", "DT", "." ]
-  example_deprel = [ "nsubj", "aux", "ROOT", "case", "det", "compound", "nmod", "case", "det", "amod",
-                     "compound","compound","compound","nmod","punct","case","compound","compound","nmod","case","det", 
-                     "nummod", "amod", "nmod", "case", "compound", "compound", "nmod", "punct", "case", "det", "nmod", 
-                     "case", "compound", "nmod", "case", "nmod", "cc", "case", "det", "conj", "case", "det", 
-                     "amod", "compound", "nmod", "case", "det", "compound", "nmod", "acl", "dobj", "case", "nmod", "dep", "punct" ]
-  example_subj_start = 33
-  example_subj_end = 36
-  example_obj_start = 43
-  example_obj_end = 45
-  example_subj_type ="ORGANIZATION"
-  example_obj_type = "ORGANIZATION"
-
-  # sanity check:
-  print(f"example sentance: {example_sentance}")
-  print(f"example tokens length: {len(example_tokens)}")
-  print(f"example pos length: {len(example_pos)}")
-  print(f"example deprel length: {len(example_deprel)}")
-
-  print(f"example subj start: {example_subj_start}")
-  print(f"example subject end: {example_subj_end}")
   
-  # subject sanity check:
-  subj_length = example_subj_end - example_subj_start
-  for x in range(subj_length + 1):
-    print(example_tokens[example_subj_start + x])
-
-  # object sanity check:
-  obj_length = example_obj_end - example_obj_start
-  for x in range(obj_length + 1):
-    print(example_tokens[example_obj_start + x])
-
-  # print("\n\n")
-
   processor = RETACREDProcessor(args, tokenizer)
-  prepd_input_representation = processor.tokenize(example_tokens, example_subj_type, example_obj_type, example_subj_start, example_subj_end, example_obj_start, example_obj_end, example_pos, example_deprel)
+  prepd_input_representation = processor.tokenize(user_input.tokens, user_input.subj_type, user_input.obj_type, user_input.subj_start, user_input.subj_end, user_input.obj_start, user_input.obj_end, user_input.pos, user_input.deprel)
 
-  # sanity check:
-  print(prepd_input_representation)
-
-  # double sanity check:
-  print("input_ids: ", prepd_input_representation[0])
-  print("ss: ", prepd_input_representation[1])
-  print("os: ", prepd_input_representation[2])
-
-  # batch of size 1:
-  # single_batch_input = collate_fn({
-  #   "input_ids": prepd_input_representation[0],
-  #   "labels": 0,
-  #   "ss": prepd_input_representation[1],
-  #   "os": prepd_input_representation[2]
-  # })
 
   input_ids_tensor, attention_tensor, ss_tensor, os_tensor = collate_single(
     prepd_input_representation[0],
@@ -145,18 +115,23 @@ def main():
     prepd_input_representation[2]
   )
 
-  # sanity check
-  print(input_ids_tensor)
-  print(attention_tensor)
-  print(ss_tensor)
-  print(os_tensor)
      
   # more of the same from inference.py
   print(f"Loading weights from {args.load_path} ...")
   checkpoint = torch.load(args.model_name_or_path, map_location=args.device)
 
   model = REModel(args, config)
-  model.load_state_dict(checkpoint['model'])
+  #TODO: vocab size mismatch issue -- is this just me?
+  old_vocab_size = checkpoint['model_state_dict']['encoder.embeddings.word_embeddings.weight'].shape[0] 
+  new_vocab_size = model.encoder.embeddings.word_embeddings.weight.shape[0]
+
+  if old_vocab_size != new_vocab_size:
+    print(f"Resizing model embeddings from {new_vocab_size} to {old_vocab_size} to match checkpoint")
+    model.encoder.resize_token_embeddings(old_vocab_size)
+
+  #TODO-- orginally checkpoint['model'], mine is checkpoint['model_state_dict']??
+  model.load_state_dict(checkpoint['model_state_dict']) 
+  
   model.to(device=args.device)
   model.eval()
 
@@ -180,7 +155,7 @@ def main():
 
   print("\n")
   print("-----")
-  print(f"Sentence Tokens: {example_sentance}")
+  print(f"Sentence Tokens: {user_input.sentence}")
   print(f"Predicted Relation: {relation_label} ({pred})")
   print(f"Logits: {logits.cpu().numpy()}\n")
   print("-----")
