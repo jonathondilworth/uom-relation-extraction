@@ -119,7 +119,7 @@ class DataLoader(object):
         
 class DataLoaderPredict(DataLoader):
     """
-    TODO: create documentation
+    Modified instance of the data loader to predict relations.
     """
     # --------------- ADAPTATIONS ---------------
     def __init__(self, data: list, opt, vocab):
@@ -141,7 +141,6 @@ class DataLoaderPredict(DataLoader):
 
     def preprocess(self, data, vocab, opt):
         """ Preprocess the data and convert to ids. """
-        # TODO: create documentation (added comments, and removed relation stuff)
         processed = []
         for d in data:
             tokens = list(d['token'])
