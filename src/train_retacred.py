@@ -7,7 +7,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from transformers import AutoConfig, AutoTokenizer
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
-from utils import set_seed, collate_fn
+from utils import set_seed, collate_fn, save_checkpoint, save_best
 from prepro import RETACREDProcessor
 from evaluation import get_f1
 from model import REModel
@@ -26,7 +26,15 @@ def train(args, model, train_features, benchmarks):
     print('Total steps: {}'.format(total_steps))
     print('Warmup steps: {}'.format(warmup_steps))
 
+    #######
+    # CHANGES
+    #######
+    # Monitor the F1 over the dev set
+    #######
+    best_dev_metrics_f1 = 0.0
+    # train : num_steps -> args.num_train_epochs
     num_steps = 0
+
     for epoch in range(int(args.num_train_epochs)):
         model.zero_grad()
         for step, batch in enumerate(tqdm(train_dataloader)):
@@ -49,16 +57,32 @@ def train(args, model, train_features, benchmarks):
                 scaler.update()
                 scheduler.step()
                 model.zero_grad()
-                wandb.log({'loss': loss.item()}, step=num_steps)
+                # CHANGES: condition use of wandb
+                if (int(args.use_wandb) > 0):
+                  wandb.log({'loss': loss.item()}, step=num_steps)
+
+            # CHANGES: checkpointing implemented in --> utils.py <--
+            if args.save_steps > 0 and num_steps % args.save_steps == 0:
+                save_checkpoint(args, model, optimizer, scheduler, num_steps)
 
             if (num_steps % args.evaluation_steps == 0 and step % args.gradient_accumulation_steps == 0):
                 for tag, features in benchmarks:
                     f1, output = evaluate(args, model, features, tag=tag)
-                    wandb.log(output, step=num_steps)
+                    # CHANGES, condition use of wandb
+                    if int(args.use_wandb) > 0:
+                      wandb.log(output, step=num_steps)
+                    # check dev benchmark for this step/epoch and update best f1 if neccesary
+                    if tag == "dev" and f1 > best_dev_metrics_f1:
+                        best_dev_metrics_f1 = f1
+                        print("new best model saved.")
+                        save_best(args, model)
 
     for tag, features in benchmarks:
         f1, output = evaluate(args, model, features, tag=tag)
-        wandb.log(output, step=num_steps)
+        # CHANGES: conditional use of wandb
+        if (int(args.use_wandb) > 0):
+          wandb.log(output, step=num_steps)
+        # CHANGES: on final evaluation, 
 
 
 def evaluate(args, model, features, tag='dev'):
@@ -105,6 +129,29 @@ def main():
                         help="The maximum total input sequence length after tokenization. Sequences longer "
                              "than this will be truncated.")
 
+    ######
+    # CHANGES: new arguments for model checkpointing
+    # Initially I thought the models were being checkpointed by wandai, but that appears to just be saving
+    # config files and logs :(
+    ######
+    
+    # Adding checkpointing aligned to src_ra_cgcn conig/arguments; however BERT should save after X 'steps'
+    # as introducing the term epoch would likely get confusing with 'train_epoch', set to 5 by default
+    parser.add_argument("--save_steps", default=1000, type=int, 
+                        help="Save model checkpoints every k steps.")
+    # directory used to place saved models (checkpoints & current best performing model)
+    # evaluated every '--save_step'/1000 steps on the dev set
+    parser.add_argument("--save_dir", default="./saved_models", type=str,
+                        help="Directory for saving (best and checkpointed) models")
+    
+    # TODO: implement changes for this argument, use wandb (bool, but consider 1=true, everything else=false)
+    parser.add_argument("--use_wandb", default=1, type=int,
+                        help="push scores/loss/memory usage, etc to weights & biases - requires account")
+
+    ######
+    # END: CHANGES
+    ######
+
     parser.add_argument("--train_batch_size", default=32, type=int,
                         help="Batch size for training.")
     parser.add_argument("--test_batch_size", default=32, type=int,
@@ -128,11 +175,13 @@ def main():
                         help="Number of steps to evaluate the model")
 
     parser.add_argument("--dropout_prob", type=float, default=0.1)
-    parser.add_argument("--project_name", type=str, default="RE_baseline")
+    parser.add_argument("--project_name", type=str, default="uom_re_project_tmp")
     parser.add_argument("--run_name", type=str, default="re-tacred")
 
     args = parser.parse_args()
-    wandb.init(project=args.project_name, name=args.run_name)
+    # CHANGES: conditional use of wandb
+    if (int(args.use_wandb) > 0):
+      wandb.init(project=args.project_name, name=args.run_name)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     args.n_gpu = torch.cuda.device_count()
@@ -168,6 +217,18 @@ def main():
         ("dev", dev_features),
         ("test", test_features),
     )
+
+    #####
+    # CHANGES
+    # This implementation uses HuggingFaces 'transformers' library
+    # see: https://pytorch.org/hub/huggingface_pytorch-transformers/
+    # tokenizer, config, etc are saved along with the model
+    #####
+
+    tokenizer.save_pretrained(args.save_dir)
+    config.save_pretrained(args.save_dir)
+
+    #####
 
     train(args, model, train_features, benchmarks)
 
