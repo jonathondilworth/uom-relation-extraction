@@ -16,7 +16,8 @@ class ModelArguments:
         setattr(self, k, v)
     else:
       self.data_dir = "./data/retacred"
-      self.model_name_or_path = "saved_models_ber_base/best_model.pt"
+      self.model_name_or_path = "saved_models"
+      self.model_checkpoint = "saved_models/pytorch_model.bin"
       self.input_format = "typed_entity_marker_punct"
       self.max_seq_length = 512
       self.test_batch_size = 32
@@ -102,8 +103,8 @@ def main():
   LABEL_TO_ID = {0: 'no_relation', 1: 'org:founded_by', 2: 'per:identity', 3: 'org:alternate_names', 4: 'per:children', 5: 'per:origin', 6: 'per:countries_of_residence', 7: 'per:employee_of', 8: 'per:title', 9: 'org:city_of_branch', 10: 'per:religion', 11: 'per:age', 12: 'per:date_of_death', 13: 'org:website', 14: 'per:stateorprovinces_of_residence', 15: 'org:top_members/employees', 16: 'org:number_of_employees/members', 17: 'org:members', 18: 'org:country_of_branch', 19: 'per:spouse', 20: 'org:stateorprovince_of_branch', 21: 'org:political/religious_affiliation', 22: 'org:member_of', 23: 'per:siblings', 24: 'per:stateorprovince_of_birth', 25: 'org:dissolved', 26: 'per:other_family', 27: 'org:shareholders', 28: 'per:parents', 29: 'per:charges', 30: 'per:schools_attended', 31: 'per:cause_of_death', 32: 'per:city_of_death', 33: 'per:stateorprovince_of_death', 34: 'org:founded', 35: 'per:country_of_death', 36: 'per:country_of_birth', 37: 'per:date_of_birth', 38: 'per:cities_of_residence', 39: 'per:city_of_birth'}
 
   # load config, a lot of the same as inference.py
-  config = AutoConfig.from_pretrained(args.load_path)
-  tokenizer = AutoTokenizer.from_pretrained(args.load_path)
+  config = AutoConfig.from_pretrained(args.load_path, local_files_only=True)
+  tokenizer = AutoTokenizer.from_pretrained(args.load_path, local_files_only=True)
   
   processor = RETACREDProcessor(args, tokenizer)
   prepd_input_representation = processor.tokenize(user_input.tokens, user_input.subj_type, user_input.obj_type, user_input.subj_start, user_input.subj_end, user_input.obj_start, user_input.obj_end, user_input.pos, user_input.deprel)
@@ -118,24 +119,23 @@ def main():
      
   # more of the same from inference.py
   print(f"Loading weights from {args.load_path} ...")
-  checkpoint = torch.load(args.model_name_or_path, map_location=args.device)
+  checkpoint = torch.load(args.model_checkpoint, map_location=args.device)
 
   model = REModel(args, config)
-  #TODO: vocab size mismatch issue -- is this just me?
-  old_vocab_size = checkpoint['model_state_dict']['encoder.embeddings.word_embeddings.weight'].shape[0] 
-  new_vocab_size = model.encoder.embeddings.word_embeddings.weight.shape[0]
+  
+  model.encoder.resize_token_embeddings(len(tokenizer))
 
-  if old_vocab_size != new_vocab_size:
-    print(f"Resizing model embeddings from {new_vocab_size} to {old_vocab_size} to match checkpoint")
-    model.encoder.resize_token_embeddings(old_vocab_size)
-
-  #TODO-- orginally checkpoint['model'], mine is checkpoint['model_state_dict']??
-  model.load_state_dict(checkpoint['model_state_dict']) 
+  # note: if you're loading best_model.pt <- may have to swap out 'model_state_dict' for 'model', depending on how 'params' to save was specified
+  # for checkpoints: 'model_state_dict', for'best_model.pt' use 'model'
+  if 'model_state_dict' in checkpoint:
+      model.load_state_dict(checkpoint['model_state_dict'])
+  else:
+      model.load_state_dict(checkpoint['model'])
   
   model.to(device=args.device)
   model.eval()
 
-  # print(args.device)
+
 
   # modified from evaluate in train_retacred & train_tacred
   with torch.no_grad():
