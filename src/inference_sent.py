@@ -23,7 +23,7 @@ class ModelArguments:
       self.test_batch_size = 32
       self.num_classes = 40
       self.dropout_prob = 0.1
-      self.load_path = "saved_models_ber_base" 
+      self.load_path = "saved_models" 
       self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
       self.n_gpu = torch.cuda.device_count()
       self.seed = 42
@@ -118,7 +118,6 @@ def main():
 
      
   # more of the same from inference.py
-  print(f"Loading weights from {args.load_path} ...")
   checkpoint = torch.load(args.model_checkpoint, map_location=args.device)
 
   model = REModel(args, config)
@@ -156,8 +155,9 @@ def main():
   print("\n")
   print("-----")
   print(f"Sentence Tokens: {user_input.sentence}")
+  print("\n")
   print(f"Predicted Relation: {relation_label} ({pred})")
-  print(f"Logits: {logits.cpu().numpy()}\n")
+  # print(f"Logits: {logits.cpu().numpy()}\n")
   print("-----")
 
 if __name__ == "__main__":
