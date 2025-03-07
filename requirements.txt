@@ -9,3 +9,5 @@ ujson
 matplotlib
 pandas
 jupyter
+ipywidgets
+nltk
