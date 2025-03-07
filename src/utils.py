@@ -77,7 +77,7 @@ def save_best(args, model):
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    best_model_dir = os.path.join(args.save_dir, f"best_model.pt")
+    best_model_dir = os.path.join(args.save_dir, f"pytorch_model.bin")
 
     # <s>presumably, if we're saving the 'best' model, we're not neccesarily planning on continuing to train it</s>
     # ^ maintaining consistent naming convention, model -> model_state_dict
