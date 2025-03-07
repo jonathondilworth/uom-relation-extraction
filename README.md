@@ -4,18 +4,18 @@ Relation Extraction for Text Mining - COMP61332
 
 ## Statement of authorship
 
-The codebase from the paper ["An Improved Baseline for Relation Extraction"](https://github.com/wzhouad/RE_improved_baseline).
+The codebase is from the paper ["An Improved Baseline for Relation Extraction"](https://github.com/wzhouad/RE_improved_baseline).
 
-The following files were modified from the original code base:
-- prepro.py
+The following files were modified from the original code base (comments in files show where edits have been made):
+- prepro.py: added 7 novel approaches to marked entities 
 - train_retacred.py
 - train_tacred.py
-- utils.py
+- utils.py: added the ability to save models
 
 The following file were added:
-- inference.py
-- inference_sent.py
-- invert_label_2_id.py
+- inference.py : this allows you to get the dev and test f1 scores for a particular model
+- inference_sent.py: this allows a user to write a sentence in command line and receive the model's prediction
+
 
 
 ## Project Structure
