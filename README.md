@@ -6,6 +6,8 @@ Relation Extraction for Text Mining - COMP61332
 
 The codebase is from the paper ["An Improved Baseline for Relation Extraction"](https://github.com/wzhouad/RE_improved_baseline).
 
+## Summary of changes
+
 The following files were modified from the original code base (comments in files show where edits have been made):
 - prepro.py: added 7 novel approaches to marked entities 
 - train_retacred.py
