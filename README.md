@@ -2,7 +2,21 @@
 
 Relation Extraction for Text Mining - COMP61332
 
-**Note: this README.md is a Work in Progress!**
+## Statement of authorship
+
+The codebase from the paper ["An Improved Baseline for Relation Extraction"](https://github.com/wzhouad/RE_improved_baseline).
+
+The following files were modified from the original code base:
+- prepro.py
+- train_retacred.py
+- train_tacred.py
+- utils.py
+
+The following file were added:
+- inference.py
+- inference_sent.py
+- invert_label_2_id.py
+
 
 ## Project Structure
 
