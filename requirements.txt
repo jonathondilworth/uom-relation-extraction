@@ -1,0 +1,13 @@
+torch
+transformers
+datasets
+scikit-learn
+tqdm
+numpy
+wandb
+ujson
+matplotlib
+pandas
+jupyter
+ipywidgets
+nltk

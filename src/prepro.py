@@ -29,10 +29,10 @@ class Processor:
             self.new_tokens = ['[E1]', '[/E1]', '[E2]', '[/E2]']
         self.tokenizer.add_tokens(self.new_tokens)
         # changes: added 'typed_entity_marker_pos', 'typed_entity_marker_pos_punct' to the list of valid formats
-        if self.args.input_format not in ('entity_mask', 'entity_marker', 'entity_marker_punct', 'typed_entity_marker', 'typed_entity_marker_punct', 'typed_entity_marker_pos', 'typed_entity_marker_pos_seq', 'typed_entity_marker_pos_set', 'typed_entity_marker_pos_punct', 'typed_entity_marker_pos_seq_punct', 'typed_entity_marker_pos_set_punct'):
+        if self.args.input_format not in ('entity_mask', 'entity_marker', 'entity_marker_punct', 'typed_entity_marker', 'typed_entity_marker_punct', 'typed_entity_marker_pos', 'typed_entity_marker_pos_seq', 'typed_entity_marker_pos_set', 'typed_entity_marker_pos_punct', 'typed_entity_marker_pos_seq_punct', 'typed_entity_marker_pos_set_punct', 'typed_entity_marker_deprel_set_punct'):
             raise Exception("Invalid input format!")
 
-    def tokenize(self, tokens, subj_type, obj_type, ss, se, os, oe, pos_tags=None):
+    def tokenize(self, tokens, subj_type, obj_type, ss, se, os, oe, pos_tags=None, deprel_tags=None):
         """
         Implement the following input formats:
             - entity_mask: [SUBJ-NER], [OBJ-NER].
@@ -47,7 +47,9 @@ class Processor:
             - typed_entity_marker_pos_seq_punct: @ * subject ner type + pos_1 + pos_2 * subject_{token_{1}} subject_{token_{2}} @, # ^ object ner type pos_1 ^ object # <-- Appends all PoS tags \in multiset(entity_{POStags}) using punct representation
             - typed_entity_marker_pos_set_punct: @ * subject ner type + pos_1 + pos_2 * subject_{token_{1}} subject_{token_{2}} @, # ^ object ner type pos_1 ^ object # <-- Appends all PoS tags \in multiset(entity_{POStags}) using punct representation
         """
-        
+        if not pos_tags or not deprel_tags:
+            raise Exception("No pos/deprel tags supplied.");
+    
         sents = []
         input_format = self.args.input_format
         
@@ -147,8 +149,8 @@ class Processor:
             subj_type = subj_type.replace("_", " ").lower();
             obj_type = obj_type.replace("_", " ").lower();
             # concatenate PoS tags
-            subj_type = self.tokenizer.tokenize(subj_type + ":" + subj_pos_string);
-            obj_type = self.tokenizer.tokenize(obj_type + ":" + obj_pos_tags);
+            subj_type = self.tokenizer.tokenize(subj_type) + [':'] + self.tokenizer.tokenize(subj_pos_string);
+            obj_type = self.tokenizer.tokenize(obj_type) + [':'] + self.tokenizer.tokenize(obj_pos_string);
 
         # approach #6:
         elif input_format == 'typed_entity_marker_pos_set_punct':
@@ -161,9 +163,20 @@ class Processor:
             subj_type = subj_type.replace("_", " ").lower();
             obj_type = obj_type.replace("_", " ").lower();
             # concatenate PoS tags
-            subj_type = self.tokenizer.tokenize(subj_type + ":" + subj_pos_string);
-            obj_type = self.tokenizer.tokenize(obj_type + ":" + obj_pos_tags);
+            subj_type = self.tokenizer.tokenize(subj_type) + [":"] + self.tokenizer.tokenize(subj_pos_string);
+            obj_type = self.tokenizer.tokenize(obj_type) + [":"] + self.tokenizer.tokenize(obj_pos_string);
 
+        # approach #7
+        elif input_format == 'typed_entity_marker_deprel_set_punct':
+            # see approach #6
+            subj_deprel_tags = list(dict.fromkeys(deprel_tags[ss : se]));
+            subj_deprel_string = " ".join(subj_deprel_tags);
+            obj_deprel_tags = list(dict.fromkeys(deprel_tags[os : oe]));
+            obj_deprel_string = " ".join(obj_deprel_tags);
+            inj_subj_type = subj_type.replace("_", " ").lower();
+            inj_obj_type = obj_type.replace("_", " ").lower();
+            subj_type = self.tokenizer.tokenize(inj_subj_type) + self.tokenizer.tokenize(subj_deprel_string);
+            obj_type = self.tokenizer.tokenize(inj_obj_type) + self.tokenizer.tokenize(obj_deprel_string);
 
         for i_t, token in enumerate(tokens):
             tokens_wordpiece = self.tokenizer.tokenize(token)
@@ -214,7 +227,7 @@ class Processor:
                 if i_t == oe:
                     tokens_wordpiece = tokens_wordpiece + [obj_end]
 
-            elif input_format == 'typed_entity_marker_punct' or input_format == 'typed_entity_marker_pos_punct' or input_format == 'typed_entity_marker_pos_seq_punct' or input_format == 'typed_entity_marker_pos_set_punct':
+            elif input_format == 'typed_entity_marker_punct' or input_format == 'typed_entity_marker_pos_punct' or input_format == 'typed_entity_marker_pos_seq_punct' or input_format == 'typed_entity_marker_pos_set_punct' or input_format == 'typed_entity_marker_deprel_set_punct':
                 if i_t == ss:
                     new_ss = len(sents)
                     tokens_wordpiece = ['@'] + ['*'] + subj_type + ['*'] + tokens_wordpiece
@@ -255,7 +268,7 @@ class TACREDProcessor(Processor):
             # their own distinct tags (i.e. [SUB-PERSON-NNP-NNP-NNP] jon anthony dil [/SUB-PERSON-NNP-NNP-NNP]) due to the creeping tag length
             # Further: using an alternative representation may shorten the observable context, i.e. '@ * person : nnp + nnp + nnp * jon anthony dil @'
             # TODO: go back and read through the papers again on the various models we're using here to understand the implications of these various changes in more depth
-            input_ids, new_ss, new_os = self.tokenize(tokens, d['subj_type'], d['obj_type'], ss, se, os, oe, pos_tags=d['stanford_pos']) # <-- CHANGES
+            input_ids, new_ss, new_os = self.tokenize(tokens, d['subj_type'], d['obj_type'], ss, se, os, oe, pos_tags=d['stanford_pos'], deprel_tags=d['stanford_deprel']) # <-- CHANGES
             rel = self.LABEL_TO_ID[d['relation']]
 
             feature = {
@@ -287,7 +300,7 @@ class RETACREDProcessor(Processor):
             tokens = [convert_token(token) for token in tokens]
 
             # modified tokenize to also accept the PoS tags
-            input_ids, new_ss, new_os = self.tokenize(tokens, d['subj_type'], d['obj_type'], ss, se, os, oe, pos_tags=d['stanford_pos']) # <-- CHANGES
+            input_ids, new_ss, new_os = self.tokenize(tokens, d['subj_type'], d['obj_type'], ss, se, os, oe, pos_tags=d['stanford_pos'], deprel_tags=d['stanford_deprel']) # <-- CHANGES
             rel = self.LABEL_TO_ID[d['relation']]
 
             feature = {
