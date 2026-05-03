@@ -1,54 +1,52 @@
-# UoM Relation Extraction Project
+# Relation Extraction for Text Mining
 
-Relation Extraction for Text Mining - COMP61332
+Relation extraction (RE) is a fundamental task in text mining. While many modern approaches to RE utilise neural architectures, these architectures can differ substantially. For instance, the use of BERT-based language models and graph convolutional neural networks (GCNs) is a well-known technique for effective RE. However, incorporating attention over the output embeddings of a GCN and exploring complex part-of-speech (PoS) tag enrichment during BERT-based fine-tuning remains underexplored. This work aims to bridge that gap by utilising scaled dot-product attention over the outputs of a GCN, varying the PoS tag representation, and enriching dependency relations with BERT-based entity markers during fine-tuning. We (1) compare our approaches to conventional implementations, and (2) compare the two approaches with one another in an exploratory manner. We find that our variations perform slightly worse than conventional implementations, but can improve computational efficiency during training for the GCN model. In addition, the BERT model outperforms the GCN-based approach in all cases. Future work could further improve the training efficiency of our GCN-based approach and investigate whether BERT-based enhancements may be beneficial for domain-specific RE (e.g., biomedical, legal, or scientific text), where explicit syntactic cues may be more useful.
 
-## Statement of authorship
+**View the paper:** [https://dilworth.me/PoSTACRED.pdf](https://dilworth.me/PoSTACRED.pdf)
 
-The codebase is from the paper ["An Improved Baseline for Relation Extraction"](https://github.com/wzhouad/RE_improved_baseline).
+**Authors (equal contribution):** Jonathon Dilworth, Emma O’Brien, Rojs Aktumanis, Alexandros Michaelides
 
-## Summary of changes
+The TeX is available within the [paper directory](/paper).
 
-The following files were modified from the original code base (comments in files show where edits have been made):
-- prepro.py: added 7 novel approaches to marked entities 
-- train_retacred.py
-- train_tacred.py
-- utils.py: added the ability to save models
+_Note: this project was a collaborative research effort undertaken during the pursuit of all authors' MSc degrees and is largely exploratory._
 
-The following file were added:
-- inference.py : this allows you to get the dev and test f1 scores for a particular model
-- inference_sent.py: this allows a user to write a sentence in command line and receive the model's prediction
+## Experiments
 
+The experimental code is provided in the [notebooks](/notebooks) for reproducibility.
 
+## Data
+
+Due to licensing restrictions, the dataset is not included in this repository.
+
+Instructions on where to obtain the dataset and how to patch it can be found within the project [documentation](/docs).
 
 ## Project Structure
 
-*Note: due to licensing, the dataset is not included within this repository. Instructions on where to obtain the dataset and how to patch it can be found under the next section.*
-
-```bash
+```
 .root_dir
 │
 ├── config/
 │   └── ...
 ├── data/
-│   ├── retacred/
-│   │   ├── dev.json
-│   │   ├── test.json
-│   │   └── train.json
-│   └── tacred/
-│       ├── dev.json
-│       ├── test.json
-│       └── train.json
+│   ├── retacred/
+│   │   ├── dev.json
+│   │   ├── test.json
+│   │   └── train.json
+│   └── tacred/
+│       ├── dev.json
+│       ├── test.json
+│       └── train.json
 ├── docs/
 │   └── ...
 ├── notebooks/
-│   └── experimental/
+│   └── experimental/
 │       ├── utils/
-│       └── models/
+│       └── models/
 │           └── ...
 ├── paper/
-│   ├── draft.pdf
-│   ├── final.pdf
-│   └── TeX/
+│   ├── draft.pdf
+│   ├── final.pdf
+│   └── TeX/
 │       └── ...
 ├── scripts/
 │   └── ...
@@ -65,6 +63,11 @@ The following file were added:
 └── README.md
 ```
 
-*We may consider merging experimental notebooks into 00_experimental.ipynb, retaining that folder on a seperate branch and eventually remove it from 'main'.*
+## Statement of authorship
 
+Part of this codebase is inherited from the paper “An Improved Baseline for Relation Extraction”.
+
+## License
+
+MIT License
 
